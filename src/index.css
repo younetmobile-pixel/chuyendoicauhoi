@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  .markdown-body h1 {
+    @apply text-2xl font-bold mb-6 mt-8 text-slate-900 border-b-2 border-slate-100 pb-4 flex items-center gap-3;
+  }
+  .markdown-body h2 {
+    @apply text-xl font-bold mb-6 mt-10 text-slate-900 flex items-center gap-4;
+  }
+  .markdown-body h2::before {
+    content: "CÂU";
+    @apply px-3 py-1 bg-slate-900 text-white text-xs font-bold rounded;
+  }
+  .markdown-body h3 {
+    @apply text-xs font-bold text-indigo-600 uppercase tracking-tighter mb-4 mt-8 flex items-center gap-2;
+  }
+  .markdown-body h3::before {
+    @apply w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-[10px] text-indigo-700 font-bold shrink-0;
+  }
+  /* Sequential numbering for steps in markdown */
+  .custom-result .markdown-body h3:nth-of-type(3n+1)::before { content: "1"; }
+  .custom-result .markdown-body h3:nth-of-type(3n+2)::before { content: "2"; }
+  .custom-result .markdown-body h3:nth-of-type(3n+0)::before { content: "3"; }
+
+  .markdown-body p {
+    @apply mb-4 leading-relaxed text-slate-700 text-sm;
+  }
+  
+  /* STEP 1: OCR Box */
+  .custom-result .markdown-body h3:nth-of-type(3n+1) + p,
+  .custom-result .markdown-body h3:nth-of-type(3n+1) + div,
+  .custom-result .markdown-body h3:nth-of-type(3n+1) + ul {
+    @apply p-4 bg-slate-50 rounded-lg border border-slate-100 font-mono text-xs leading-relaxed text-slate-700 mb-6;
+  }
+
+  /* STEP 2: Translation Box */
+  .custom-result .markdown-body h3:nth-of-type(3n+2) + p,
+  .custom-result .markdown-body h3:nth-of-type(3n+2) + div {
+    @apply p-4 border-l-4 border-slate-200 italic text-slate-600 leading-relaxed text-sm mb-6 bg-slate-50/30;
+  }
+
+  /* STEP 3: Explanation Box */
+  .custom-result .markdown-body h3:nth-of-type(3n+0) + p,
+  .custom-result .markdown-body h3:nth-of-type(3n+0) + div {
+    @apply bg-indigo-50/50 p-5 rounded-xl border border-indigo-100 text-slate-700 leading-relaxed text-sm mb-6 shadow-sm;
+  }
+
+  .markdown-body hr {
+    @apply my-12 border-slate-200 border-t;
+  }
+  .markdown-body strong {
+    @apply font-bold text-slate-900;
+  }
+  .markdown-body code {
+    @apply bg-slate-100 px-1.5 py-0.5 rounded font-mono text-xs text-indigo-600 border border-slate-200;
+  }
+}

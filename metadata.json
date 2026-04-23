@@ -1,0 +1,8 @@
+{
+  "name": "Korean Exam Scanner Pro",
+  "description": "Máy quét và phân tích đề thi tiếng Hàn chuyên sâu sử dụng AI. Trích xuất OCR, dịch thuật và giải thích đáp án sư phạm.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}
