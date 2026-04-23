@@ -66,10 +66,18 @@ export default function App() {
   };
 
   const handleLogin = async () => {
+    setError(null);
     try {
       await loginWithGoogle();
-    } catch (err) {
-      setError("Đăng nhập thất bại. Vui lòng thử lại.");
+    } catch (err: any) {
+      if (err.code === 'auth/popup-closed-by-user') {
+        setError("Cửa sổ đăng nhập đã bị đóng. Vui lòng thử lại và hoàn tất quá trình trong cửa sổ hiện ra.");
+      } else if (err.code === 'auth/cancelled-popup-request') {
+        // Ignored: already handling another request
+      } else {
+        setError("Đăng nhập thất bại (Lỗi: " + (err.message || "Unknown") + "). Vui lòng kiểm tra cấu hình Firebase Console.");
+      }
+      console.error("Firebase Login Detail:", err);
     }
   };
 
