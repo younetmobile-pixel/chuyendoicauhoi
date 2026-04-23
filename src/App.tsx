@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { 
   Upload, 
   Image as ImageIcon, 
@@ -17,15 +17,26 @@ import {
   ShieldCheck,
   Zap,
   Cpu,
-  FileText
+  FileText,
+  History,
+  LogIn,
+  LogOut,
+  Trash2,
+  ChevronRight,
+  User as UserIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import { saveAs } from 'file-saver';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, BorderStyle } from 'docx';
 import { scanExamImage } from './services/geminiService';
+import { auth, loginWithGoogle, logout, saveScan, getUserScans, deleteScan, ScanRecord } from './lib/firebase.ts';
+import { onAuthStateChanged, User } from 'firebase/auth';
 
 export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [scans, setScans] = useState<ScanRecord[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const [image, setImage] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -33,10 +44,47 @@ export default function App() {
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        fetchHistory(currentUser.uid);
+      } else {
+        setScans([]);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const fetchHistory = async (userId: string) => {
+    try {
+      const data = await getUserScans(userId);
+      setScans(data);
+    } catch (err) {
+      console.error("Failed to fetch history:", err);
+    }
+  };
+
+  const handleLogin = async () => {
+    try {
+      await loginWithGoogle();
+    } catch (err) {
+      setError("Đăng nhập thất bại. Vui lòng thử lại.");
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      reset();
+    } catch (err) {
+      setError("Đăng xuất thất bại.");
+    }
+  };
+
   const handleExportWord = async () => {
     if (!result) return;
-
-    // Simple parsing of markdown to docx elements
+    // ... Word export logic ...
     const lines = result.split('\n');
     const sections: any[] = [
       new Paragraph({
@@ -120,7 +168,6 @@ export default function App() {
       setImage(result);
       setResult(null);
       setError(null);
-      // Trigger scan immediately after image is set
       setTimeout(() => triggerAutoScan(result), 100);
     };
     reader.readAsDataURL(file);
@@ -133,10 +180,55 @@ export default function App() {
       const mimeType = imageData.split(';')[0].split(':')[1];
       const data = await scanExamImage(imageData, mimeType);
       setResult(data.text);
+      
+      // Auto save to history if user is logged in
+      if (auth.currentUser) {
+        const title = data.text.split('\n')[0].replace('## ', '').substring(0, 50) || "Bản quét mới";
+        await saveScan(auth.currentUser.uid, title, data.text);
+        fetchHistory(auth.currentUser.uid);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Có lỗi xảy ra khi phân tích hình ảnh.');
     } finally {
       setIsScanning(false);
+    }
+  };
+
+  const handleScan = async () => {
+    if (!image) return;
+    setIsScanning(true);
+    setError(null);
+    try {
+      const mimeType = image.split(';')[0].split(':')[1];
+      const data = await scanExamImage(image, mimeType);
+      setResult(data.text);
+      
+      if (user) {
+        const title = data.text.split('\n')[0].replace('## ', '').substring(0, 50) || "Bản quét mới";
+        await saveScan(user.uid, title, data.text);
+        fetchHistory(user.uid);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Có lỗi xảy ra khi phân tích hình ảnh.');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const loadFromHistory = (scan: ScanRecord) => {
+    setResult(scan.resultText);
+    setImage(null);
+    setShowHistory(false);
+  };
+
+  const handleDeleteHistory = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!confirm("Bạn có chắc chắn muốn xóa bản ghi này?")) return;
+    try {
+      await deleteScan(id);
+      if (user) fetchHistory(user.uid);
+    } catch (err) {
+      console.error("Delete failed:", err);
     }
   };
 
@@ -159,22 +251,6 @@ export default function App() {
     }
   };
 
-  const handleScan = async () => {
-    if (!image) return;
-
-    setIsScanning(true);
-    setError(null);
-    try {
-      const mimeType = image.split(';')[0].split(':')[1];
-      const data = await scanExamImage(image, mimeType);
-      setResult(data.text);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Có lỗi xảy ra khi phân tích hình ảnh.');
-    } finally {
-      setIsScanning(false);
-    }
-  };
-
   const reset = () => {
     setImage(null);
     setResult(null);
@@ -191,12 +267,40 @@ export default function App() {
           </div>
           <h1 className="font-bold text-lg tracking-tight">K-ANALYZER <span className="text-slate-400 font-normal">PRO</span></h1>
         </div>
-        <div className="flex items-center gap-6">
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-full text-[10px] font-bold text-slate-600">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-            HỆ THỐNG ĐANG HOẠT ĐỘNG
-          </div>
-          <div className="flex gap-2">
+        <div className="flex items-center gap-4">
+          {user && (
+            <button 
+              onClick={() => setShowHistory(!showHistory)}
+              className={`p-2 rounded-lg transition-colors ${showHistory ? 'bg-indigo-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'}`}
+              title="Lịch sử quét"
+            >
+              <History className="w-5 h-5" />
+            </button>
+          )}
+
+          <div className="h-6 w-px bg-slate-200 mx-1"></div>
+
+          {user ? (
+            <div className="flex items-center gap-3">
+              <div className="hidden md:flex flex-col items-end">
+                <span className="text-xs font-bold text-slate-900 leading-none">{user.displayName}</span>
+                <span className="text-[10px] text-slate-500 uppercase tracking-tight">Thành viên Pro</span>
+              </div>
+              <img src={user.photoURL || ""} alt="Avatar" className="w-8 h-8 rounded-full border border-slate-200" />
+              <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-500 transition-colors">
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
+          ) : (
+            <button 
+              onClick={handleLogin}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              <LogIn className="w-4 h-4" /> Đăng nhập Google
+            </button>
+          )}
+          
+          <div className="flex gap-2 ml-4">
             {result && (
               <button 
                 onClick={handleExportWord}
@@ -225,7 +329,59 @@ export default function App() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex overflow-hidden">
+      <main className="flex-1 flex overflow-hidden relative">
+        {/* History Sidebar overlay */}
+        <AnimatePresence>
+          {showHistory && (
+            <motion.div 
+              initial={{ x: -300 }}
+              animate={{ x: 0 }}
+              exit={{ x: -300 }}
+              className="absolute left-0 top-0 bottom-0 w-80 bg-white border-r border-slate-200 z-20 shadow-2xl flex flex-col"
+            >
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                <h2 className="font-bold flex items-center gap-2">
+                  <History className="w-5 h-5 text-indigo-500" />
+                  Lịch sử phân tích
+                </h2>
+                <button onClick={() => setShowHistory(false)} className="text-slate-400 hover:text-slate-600">
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {scans.length === 0 ? (
+                  <div className="py-20 text-center text-slate-400">
+                    <History className="w-10 h-10 mx-auto mb-2 opacity-10" />
+                    <p className="text-xs uppercase font-bold tracking-widest">Chưa có lịch sử</p>
+                  </div>
+                ) : (
+                  scans.map((scan) => (
+                    <div 
+                      key={scan.id}
+                      onClick={() => loadFromHistory(scan)}
+                      className="group p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/50 cursor-pointer transition-all"
+                    >
+                      <div className="flex justify-between items-start gap-2">
+                        <h3 className="text-sm font-bold text-slate-800 line-clamp-2 leading-tight uppercase tracking-tight">{scan.title}</h3>
+                        <button 
+                          onClick={(e) => scan.id && handleDeleteHistory(e, scan.id)}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all shadow-sm bg-white rounded"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between text-[10px] text-slate-400 font-bold">
+                        <span>{scan.timestamp?.toDate().toLocaleDateString('vi-VN')}</span>
+                        <span className="text-indigo-400 uppercase">Xem lại <ChevronRight className="w-3 h-3 inline" /></span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Left: Source Preview Sidebar */}
         <section className="w-[400px] border-r border-slate-200 bg-slate-100 p-6 flex flex-col gap-4 shrink-0 overflow-y-auto">
           <div className="flex justify-between items-end mb-2">
@@ -255,6 +411,9 @@ export default function App() {
                 />
                 <Upload className="w-10 h-10 text-slate-300 mb-4" />
                 <p className="text-sm font-bold text-slate-500 uppercase tracking-wider text-center">Tải lên hoặc kéo thả ảnh đề thi</p>
+                {!user && (
+                    <p className="text-[10px] text-slate-400 mt-4 uppercase font-bold text-center italic">Đăng nhập để tự động lưu lịch sử</p>
+                )}
               </div>
             ) : (
               <div className="flex-1 relative group bg-slate-100">
@@ -358,9 +517,11 @@ export default function App() {
       <footer className="h-10 bg-slate-900 text-white px-8 flex items-center justify-between text-[10px] tracking-wider uppercase font-medium shrink-0">
         <div className="flex gap-6">
           <span className="flex items-center gap-2">
-            <ShieldCheck className="w-3 h-3 text-emerald-400" /> Secure Processing
+            <ShieldCheck className="w-3 h-3 text-emerald-400" /> Professional Grade
           </span>
-          <span className="text-slate-400">Environment: Google AI Studio</span>
+          <span className="text-slate-400 flex items-center gap-2">
+             <UserIcon className="w-3 h-3" /> {user ? `Authenticated: ${user.email}` : "Cloud Sync Disabled"}
+          </span>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-slate-500">Gemini 2.0 Flash Vision</span>

@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    
+    function incoming() {
+      return request.resource.data;
+    }
+    
+    function existing() {
+      return resource.data;
+    }
+
+    // Validate Scan entity
+    function isValidScan(data) {
+      return data.userId is string 
+        && data.userId == request.auth.uid
+        && data.resultText is string 
+        && data.resultText.size() <= 1048576 // 1MB limit for text
+        && data.title is string
+        && data.title.size() <= 200
+        && data.timestamp is timestamp;
+    }
+
+    match /scans/{scanId} {
+      allow create: if isSignedIn() 
+        && isValidScan(incoming())
+        && incoming().timestamp == request.time;
+        
+      allow read, delete: if isSignedIn() 
+        && existing().userId == request.auth.uid;
+        
+      allow update: if false; // Scans are immutable for history preservation
+    }
+  }
+}

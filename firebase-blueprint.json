@@ -1,0 +1,22 @@
+{
+  "entities": {
+    "Scan": {
+      "title": "Scan Record",
+      "description": "Lịch sử quét đề thi của người dùng",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "resultText": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "resultText", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/scans/{scanId}": {
+      "schema": "Scan",
+      "description": "Danh sách các bản quét đề thi"
+    }
+  }
+}
